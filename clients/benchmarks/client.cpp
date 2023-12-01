@@ -1384,9 +1384,25 @@ int rocblas_bench_datafile(const std::string& filter,
                            const std::string& name_filter,
                            bool               any_stride)
 {
-    int ret = 0;
+    int                                  ret = 0;
+    device_strided_batch_matrix<int16_t> dA(1, 1, 1, 1, 1);
+    device_strided_batch_matrix<int16_t> dB(1, 1, 1, 1, 1);
+    device_strided_batch_matrix<int16_t> dC(1, 1, 1, 1, 1);
+
     for(Arguments arg : RocBLAS_TestData())
+    {
+        std::cout << "before dA " << &dA << std::endl;
+        memcpy(arg.dA, &dA, sizeof(&dA));
+        std::cout << "after dA " << arg.dA << std::endl;
+        memcpy(arg.dB, &dB, sizeof(&dA));
+        memcpy(arg.dC, &dC, sizeof(&dA));
+        // (char*)arg.dA = (char*)&dA;
+        // (char*)arg.dB = (char*)&dB;
+        // (char*)arg.dC = (char*)&dC;
+        // rocblas_cout << "rocblas_bench_datafile " << arg << ", " << filter << ", " << name_filter
+        //              << ", " << any_stride << std::endl;
         ret |= run_bench_test(true, arg, filter, name_filter, any_stride, true);
+    }
     test_cleanup::cleanup();
     return ret;
 }

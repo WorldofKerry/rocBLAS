@@ -182,9 +182,9 @@ struct Arguments
     bool HMM; // xnack+
     bool graph_test;
 
-    char* dA;
-    char* dB;
-    char* dC;
+    char dA[64];
+    char dB[64];
+    char dC[64];
 
     /*************************************************************************
      *                     End Of Arguments                                  *
@@ -269,7 +269,10 @@ struct Arguments
     OPER(c_noalias_d) SEP            \
     OPER(outofplace) SEP             \
     OPER(HMM) SEP                    \
-    OPER(graph_test)
+    OPER(graph_test) SEP             \
+    OPER(dA) SEP                     \
+    OPER(dB) SEP                     \
+    OPER(dC)
 
     // clang-format on
 

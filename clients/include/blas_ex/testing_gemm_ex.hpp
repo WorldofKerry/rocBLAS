@@ -239,6 +239,8 @@ dD, d_type, ldd, compute_type, algo, solution_index, flags), rocblas_status_succ
 template <typename Ti, typename To, typename Tc>
 void testing_gemm_ex(const Arguments& arg)
 {
+    rocblas_cout << "arg " << arg << std::endl;
+    throw std::runtime_error("");
     auto rocblas_gemm_ex_fn = arg.api == FORTRAN ? rocblas_gemm_ex_fortran : rocblas_gemm_ex;
 
     rocblas_gemm_algo algo = rocblas_gemm_algo(arg.algo);
@@ -342,7 +344,7 @@ void testing_gemm_ex(const Arguments& arg)
         size_t a_b_c_d_size
             = (stride_a + stride_b) * sizeof(Ti) + (stride_c + stride_d) * sizeof(To);
         flush_batch_count = 1 + ((flush_malloc_size - 1) / a_b_c_d_size);
-        rocblas_cout << "flush_batch_count = " << flush_batch_count << std::endl;
+        // rocblas_cout << "flush_batch_count = " << flush_batch_count << std::endl;
     }
 
     // Allocate host memory
@@ -589,12 +591,19 @@ void testing_gemm_ex(const Arguments& arg)
         }
 
         hipStream_t stream;
-        CHECK_ROCBLAS_ERROR(rocblas_get_stream(handle, &stream));
-        gpu_time_used = get_time_us_sync(stream); // in microseconds
+        // CHECK_ROCBLAS_ERROR(rocblas_get_stream(handle, &stream));
+        // gpu_time_used = get_time_us_sync(stream); // in microseconds
+        gpu_time_used = get_time_us_sync_device(); // in microseconds
         for(int i = 0; i < number_hot_calls; i++)
         {
             int flush_index = (i + 1) % flush_batch_count;
             // clang-format off
+            rocblas_cout << handle << ", " << transA << ", " << transB << ", " << M << ", " << N << ", " << K << ", " << &h_alpha_Tc << ", " <<
+                               dA[flush_index] << ", " << arg.a_type << ", " << lda << ", " <<
+                               dB[flush_index] << ", " << arg.b_type << ", " << ldb << ", " << &h_beta_Tc << ", " <<
+                               dC[flush_index] << ", " << arg.c_type << ", " << ldc << ", " <<
+                               dD[flush_index] << ", " <<     d_type << ", " << ldd << ", " <<
+                               arg.compute_type << ", " << algo << ", " << solution_index << ", " << flags << std::endl;
             rocblas_gemm_ex_fn(handle, transA, transB, M, N, K, &h_alpha_Tc,
                                dA[flush_index], arg.a_type, lda,
                                dB[flush_index], arg.b_type, ldb, &h_beta_Tc,
@@ -603,7 +612,7 @@ void testing_gemm_ex(const Arguments& arg)
                                arg.compute_type, algo, solution_index, flags);
             // clang-format on
         }
-        gpu_time_used = get_time_us_sync(stream) - gpu_time_used;
+        gpu_time_used = get_time_us_sync_device() - gpu_time_used;
 
         ArgumentModel<e_transA,
                       e_transB,
