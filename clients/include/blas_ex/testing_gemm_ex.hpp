@@ -401,9 +401,11 @@ void testing_gemm_ex(const Arguments& arg)
     host_matrix<Ti> hB(B_row, B_col, ldb);
     host_matrix<To> hC(M, N, ldc);
 
+    rocblas_cout << "A_row " << A_row << std::endl;
+
     // Allocate device memory
-    device_matrix<Ti> dA(A_row, A_col, lda);
-    device_matrix<Ti> dB(B_row, B_col, ldb);
+    static device_matrix<Ti> dA(50000, A_col, lda);
+    device_matrix<Ti>        dB(B_row, B_col, ldb);
 
     // if C!=D, allocate C and D normally
     // if C==D, allocate C big enough for the larger of C and D; D points to C
