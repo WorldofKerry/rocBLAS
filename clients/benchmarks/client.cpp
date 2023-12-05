@@ -1384,9 +1384,12 @@ int rocblas_bench_datafile(const std::string& filter,
                            const std::string& name_filter,
                            bool               any_stride)
 {
+    int                    ret      = 0;
     auto                   arg_iter = RocBLAS_TestData();
     std::vector<Arguments> args{arg_iter.begin(), arg_iter.end()};
-    size_t                 maxM = 0, maxN = 0, maxK = 0, ldA = 0, ldB = 0, ldC = 0, ldD = 0;
+
+    bool   do_shared_memory = true;
+    size_t maxM = 0, maxN = 0, maxK = 0, ldA = 0, ldB = 0, ldC = 0, ldD = 0;
     for(Arguments arg : args)
     {
         if(arg.M > maxM)
@@ -1395,45 +1398,63 @@ int rocblas_bench_datafile(const std::string& filter,
             maxN = arg.N;
         if(arg.K > maxK)
             maxK = arg.K;
+        if(arg.a_type != rocblas_datatype_f16_r || arg.b_type != rocblas_datatype_f16_r
+           || arg.c_type != rocblas_datatype_f16_r || arg.d_type != rocblas_datatype_f16_r
+           || !strcmp(arg.function, "rocblas_gemm_ex"))
+        {
+            do_shared_memory = false;
+            break;
+        }
     }
-    device_vector<rocblas_half> dA(maxM * maxK);
-    device_vector<rocblas_half> dB(maxK * maxN);
-    device_vector<rocblas_half> dC(maxM * maxN);
-    device_vector<rocblas_half> dD(maxM * maxN);
-    void*                       dAPointer = dA.device_vector_setup();
-    void*                       dBPointer = dB.device_vector_setup();
-    void*                       dCPointer = dC.device_vector_setup();
-    void*                       dDPointer = dD.device_vector_setup();
-
-    // Allocate host memory
-    host_vector<rocblas_half> hA(maxM * maxK);
-    host_vector<rocblas_half> hB(maxK * maxN);
-    host_vector<rocblas_half> hC(maxM * maxN);
-
-    // Check host memory allocation
-    CHECK_HIP_ERROR(hA.memcheck());
-    CHECK_HIP_ERROR(hB.memcheck());
-    CHECK_HIP_ERROR(hC.memcheck());
-
-    // Initialize host memory
-    // rocblas_check_matrix_type, uplo, host_vector, M, N, lda
-    rocblas_init_matrix_trig<rocblas_half>(rocblas_client_general_matrix, '*', hA, maxM, maxK, 1);
-    rocblas_init_matrix_trig<rocblas_half>(rocblas_client_general_matrix, '*', hB, maxK, maxN, 1);
-    rocblas_init_matrix_trig<rocblas_half>(rocblas_client_general_matrix, '*', hC, maxM, maxN, 1);
-
-    // copy data from CPU to device
-    CHECK_HIP_ERROR(dA.transfer_from(hA));
-    CHECK_HIP_ERROR(dB.transfer_from(hB));
-    CHECK_HIP_ERROR(dC.transfer_from(hC));
-
-    int ret = 0;
-    for(Arguments arg : args)
+    if(do_shared_memory)
     {
-        arg.dA = dAPointer;
-        arg.dB = dBPointer;
-        arg.dC = dCPointer;
-        arg.dD = dDPointer;
-        ret |= run_bench_test(true, arg, filter, name_filter, any_stride, true);
+        device_vector<rocblas_half> dA(maxM * maxK);
+        device_vector<rocblas_half> dB(maxK * maxN);
+        device_vector<rocblas_half> dC(maxM * maxN);
+        device_vector<rocblas_half> dD(maxM * maxN);
+        void*                       dAPointer = dA.device_vector_setup();
+        void*                       dBPointer = dB.device_vector_setup();
+        void*                       dCPointer = dC.device_vector_setup();
+        void*                       dDPointer = dD.device_vector_setup();
+
+        // Allocate host memory
+        host_vector<rocblas_half> hA(maxM * maxK);
+        host_vector<rocblas_half> hB(maxK * maxN);
+        host_vector<rocblas_half> hC(maxM * maxN);
+
+        // Check host memory allocation
+        CHECK_HIP_ERROR(hA.memcheck());
+        CHECK_HIP_ERROR(hB.memcheck());
+        CHECK_HIP_ERROR(hC.memcheck());
+
+        // Initialize host memory
+        // rocblas_check_matrix_type, uplo, host_vector, M, N, lda
+        rocblas_init_matrix_trig<rocblas_half>(
+            rocblas_client_general_matrix, '*', hA, maxM, maxK, 1);
+        rocblas_init_matrix_trig<rocblas_half>(
+            rocblas_client_general_matrix, '*', hB, maxK, maxN, 1);
+        rocblas_init_matrix_trig<rocblas_half>(
+            rocblas_client_general_matrix, '*', hC, maxM, maxN, 1);
+
+        // copy data from CPU to device
+        CHECK_HIP_ERROR(dA.transfer_from(hA));
+        CHECK_HIP_ERROR(dB.transfer_from(hB));
+        CHECK_HIP_ERROR(dC.transfer_from(hC));
+        for(Arguments arg : args)
+        {
+            arg.dA = dAPointer;
+            arg.dB = dBPointer;
+            arg.dC = dCPointer;
+            arg.dD = dDPointer;
+            ret |= run_bench_test(true, arg, filter, name_filter, any_stride, true);
+        }
+    }
+    else
+    {
+        for(Arguments arg : args)
+        {
+            ret |= run_bench_test(true, arg, filter, name_filter, any_stride, true);
+        }
     }
     test_cleanup::cleanup();
     return ret;

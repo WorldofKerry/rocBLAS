@@ -345,104 +345,121 @@ void testing_gemm_ex(const Arguments& arg)
         rocblas_cout << "flush_batch_count = " << flush_batch_count << std::endl;
     }
 
-    // Allocate host memory
-    //host_matrix<Ti> hA(A_row, A_col, lda);
-    //host_matrix<Ti> hB(B_row, B_col, ldb);
-    //host_matrix<To> hC(M, N, ldc);
-
-    // Check host memory allocation
-    //CHECK_HIP_ERROR(hA.memcheck());
-    //CHECK_HIP_ERROR(hB.memcheck());
-    //CHECK_HIP_ERROR(hC.memcheck());
-
     // Allocate device memory
-    //device_strided_batch_matrix<Ti> dA(A_row, A_col, lda, stride_a, flush_batch_count);
-    //device_strided_batch_matrix<Ti> dB(B_row, B_col, ldb, stride_b, flush_batch_count);
-    //device_strided_batch_matrix<To> dC(M, N, ldc, stride_c, flush_batch_count);
+    device_strided_batch_matrix<Ti> dA(arg.dA, A_row, A_col, lda, stride_a, flush_batch_count);
+    device_strided_batch_matrix<Ti> dB(arg.dB, B_row, B_col, ldb, stride_b, flush_batch_count);
+    device_strided_batch_matrix<To> dC(arg.dC, M, N, ldc, stride_c, flush_batch_count);
     // if C!=D, allocate C and D normally
     // if C==D, allocate C big enough for the larger of C and D; D points to C
-    //device_strided_batch_matrix<To> dD_alloc
-    //    = (arg.outofplace) ? device_strided_batch_matrix<To>(M, N, ldd, stride_d, flush_batch_count)
-    //                       : device_strided_batch_matrix<To>(0, 1, 1, 1, 1);
-    //device_strided_batch_matrix<To>& dD = (arg.outofplace) ? dD_alloc : dC;
+    device_strided_batch_matrix<To> dD_alloc
+        = (arg.outofplace)
+              ? device_strided_batch_matrix<To>(arg.dD, M, N, ldd, stride_d, flush_batch_count)
+              : device_strided_batch_matrix<To>(0, 1, 1, 1, 1);
+    device_strided_batch_matrix<To>& dD = (arg.outofplace) ? dD_alloc : dC;
 
     device_vector<Tc> d_alpha_Tc(1);
     device_vector<Tc> d_beta_Tc(1);
 
     // Check device memory allocation
-    /*
+
     CHECK_DEVICE_ALLOCATION(dA.memcheck());
     CHECK_DEVICE_ALLOCATION(dB.memcheck());
     CHECK_DEVICE_ALLOCATION(dC.memcheck());
     CHECK_DEVICE_ALLOCATION(dD_alloc.memcheck());
     CHECK_DEVICE_ALLOCATION(d_alpha_Tc.memcheck());
     CHECK_DEVICE_ALLOCATION(d_beta_Tc.memcheck());
-    */
 
     bool alt       = (rocblas_gemm_flags_fp16_alt_impl & flags);
     bool alt_round = (rocblas_gemm_flags_fp16_alt_impl_rnz & flags);
-    /*
-    // Initialize data on host memory
-    rocblas_init_matrix<Ti>(
-        hA, arg, rocblas_client_alpha_sets_nan, rocblas_client_general_matrix, true);
-    rocblas_init_matrix<Ti, true>(
-        hB, arg, rocblas_client_alpha_sets_nan, rocblas_client_general_matrix, false, true);
-    rocblas_init_matrix<To, true>(
-        hC, arg, rocblas_client_beta_sets_nan, rocblas_client_general_matrix);
 
-    if(std::is_same<To, rocblas_half>{} && std::is_same<Tc, float>{}
-       && arg.arithmetic_check == rocblas_arithmetic_check::ieee16_ieee32)
+    if(arg.dA == nullptr)
     {
-        // half precision IEEE has max and lowest values 65504 and -65504,
-        // float precision IEEE has max and lowest values 3.403e+38 and -3.403e+38
-        // the following will overflow to inf in half arithmetic,
-        // but it will equal zero in float arithmetic   65504 * 2 - 65504 * 2
-        //
-        // set matrix A and matrix B so reduction sum has 65504 * 2 - 65504 * 2
-        //
-        const rocblas_half ieee_half_near_max(65504.0 - 4.0);
-        const rocblas_half positive_two(2.0);
-        const rocblas_half negative_two(-2.0);
-        if(M >= 2 && N >= 2 && K >= 2)
+        // Allocate host memory
+        host_matrix<Ti> hA(A_row, A_col, lda);
+        host_matrix<Ti> hB(B_row, B_col, ldb);
+        host_matrix<To> hC(M, N, ldc);
+
+        // Check host memory allocation
+        CHECK_HIP_ERROR(hA.memcheck());
+        CHECK_HIP_ERROR(hB.memcheck());
+        CHECK_HIP_ERROR(hC.memcheck());
+
+        // Initialize data on host memory
+        rocblas_init_matrix<Ti>(
+            hA, arg, rocblas_client_alpha_sets_nan, rocblas_client_general_matrix, true);
+        rocblas_init_matrix<Ti, true>(
+            hB, arg, rocblas_client_alpha_sets_nan, rocblas_client_general_matrix, false, true);
+        rocblas_init_matrix<To, true>(
+            hC, arg, rocblas_client_beta_sets_nan, rocblas_client_general_matrix);
+
+        if(std::is_same<To, rocblas_half>{} && std::is_same<Tc, float>{}
+           && arg.arithmetic_check == rocblas_arithmetic_check::ieee16_ieee32)
         {
-            Ti* A = (Ti*)hA;
-            Ti* B = (Ti*)hB;
-            if(transA == rocblas_operation_none)
+            // half precision IEEE has max and lowest values 65504 and -65504,
+            // float precision IEEE has max and lowest values 3.403e+38 and -3.403e+38
+            // the following will overflow to inf in half arithmetic,
+            // but it will equal zero in float arithmetic   65504 * 2 - 65504 * 2
+            //
+            // set matrix A and matrix B so reduction sum has 65504 * 2 - 65504 * 2
+            //
+            const rocblas_half ieee_half_near_max(65504.0 - 4.0);
+            const rocblas_half positive_two(2.0);
+            const rocblas_half negative_two(-2.0);
+            if(M >= 2 && N >= 2 && K >= 2)
             {
-                A[0]   = Ti(ieee_half_near_max);
-                A[lda] = Ti(ieee_half_near_max);
-            }
-            else
-            {
-                A[0] = Ti(ieee_half_near_max);
-                A[1] = Ti(ieee_half_near_max);
-            }
-            if(transB == rocblas_operation_none)
-            {
-                for(int j = 0; j < N; j++)
+                Ti* A = (Ti*)hA;
+                Ti* B = (Ti*)hB;
+                if(transA == rocblas_operation_none)
                 {
-                    B[j * ldb]     = j % 2 == 0 ? Ti(positive_two) : Ti(negative_two);
-                    B[1 + j * ldb] = j % 2 == 0 ? Ti(negative_two) : Ti(positive_two);
+                    A[0]   = Ti(ieee_half_near_max);
+                    A[lda] = Ti(ieee_half_near_max);
                 }
-            }
-            else
-            {
-                for(int j = 0; j < N; j++)
+                else
                 {
-                    B[j]       = j % 2 == 0 ? Ti(positive_two) : Ti(negative_two);
-                    B[ldb + j] = j % 2 == 0 ? Ti(negative_two) : Ti(positive_two);
+                    A[0] = Ti(ieee_half_near_max);
+                    A[1] = Ti(ieee_half_near_max);
+                }
+                if(transB == rocblas_operation_none)
+                {
+                    for(int j = 0; j < N; j++)
+                    {
+                        B[j * ldb]     = j % 2 == 0 ? Ti(positive_two) : Ti(negative_two);
+                        B[1 + j * ldb] = j % 2 == 0 ? Ti(negative_two) : Ti(positive_two);
+                    }
+                }
+                else
+                {
+                    for(int j = 0; j < N; j++)
+                    {
+                        B[j]       = j % 2 == 0 ? Ti(positive_two) : Ti(negative_two);
+                        B[ldb + j] = j % 2 == 0 ? Ti(negative_two) : Ti(positive_two);
+                    }
                 }
             }
         }
-    }
 
-    // copy data from CPU to device
-    CHECK_HIP_ERROR(dA.broadcast_one_matrix_from(hA));
-    CHECK_HIP_ERROR(dB.broadcast_one_matrix_from(hB));
-    CHECK_HIP_ERROR(dC.broadcast_one_matrix_from(hC));
+        // copy data from CPU to device
+        CHECK_HIP_ERROR(dA.broadcast_one_matrix_from(hA));
+        CHECK_HIP_ERROR(dB.broadcast_one_matrix_from(hB));
+        CHECK_HIP_ERROR(dC.broadcast_one_matrix_from(hC));
+    }
 
     if(arg.unit_check || arg.norm_check)
     {
+        // Allocate host memory
+        host_matrix<Ti> hA(A_row, A_col, lda);
+        host_matrix<Ti> hB(B_row, B_col, ldb);
+        host_matrix<To> hC(M, N, ldc);
+
+        // Check host memory allocation
+        CHECK_HIP_ERROR(hA.memcheck());
+        CHECK_HIP_ERROR(hB.memcheck());
+        CHECK_HIP_ERROR(hC.memcheck());
+
+        CHECK_HIP_ERROR(hA.transfer_one_matrix_from(dA));
+        CHECK_HIP_ERROR(hB.transfer_one_matrix_from(dB));
+        CHECK_HIP_ERROR(hC.transfer_one_matrix_from(dC));
+
         using To_hpa = std::conditional_t<std::is_same_v<To, rocblas_bfloat16>, float, To>;
 
         host_matrix<To>     hD(M, N, ldd);
@@ -570,7 +587,7 @@ void testing_gemm_ex(const Arguments& arg)
             rocblas_error = err1 > rocblas_error ? err1 : rocblas_error;
         }
     }
-*/
+
     if(arg.timing)
     {
         int number_cold_calls = arg.cold_iters;
@@ -582,10 +599,10 @@ void testing_gemm_ex(const Arguments& arg)
         {
             // clang-format off
             CHECK_ROCBLAS_ERROR(rocblas_gemm_ex_fn(handle, transA, transB, M, N, K, &h_alpha_Tc,
-                                                   arg.dA, arg.a_type, lda,
-                                                   arg.dB, arg.b_type, ldb, &h_beta_Tc,
-                                                   arg.dC, arg.c_type, ldc,
-                                                   arg.dD,     d_type, ldd,
+                                                   dA[0], arg.a_type, lda,
+                                                   dB[0], arg.b_type, ldb, &h_beta_Tc,
+                                                   dC[0], arg.c_type, ldc,
+                                                   dD[0],     d_type, ldd,
                                                    arg.compute_type, algo, solution_index, flags));
             // clang-format on
         }
@@ -598,10 +615,10 @@ void testing_gemm_ex(const Arguments& arg)
             int flush_index = (i + 1) % flush_batch_count;
             // clang-format off
             rocblas_gemm_ex_fn(handle, transA, transB, M, N, K, &h_alpha_Tc,
-                               arg.dA, arg.a_type, lda,
-                               arg.dB, arg.b_type, ldb, &h_beta_Tc,
-                               arg.dC, arg.c_type, ldc,
-                               arg.dD,     d_type, ldd,
+                               dA[flush_index], arg.a_type, lda,
+                               dB[flush_index], arg.b_type, ldb, &h_beta_Tc,
+                               dC[flush_index], arg.c_type, ldc,
+                               dD[flush_index],     d_type, ldd,
                                arg.compute_type, algo, solution_index, flags);
             // clang-format on
         }

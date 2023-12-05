@@ -66,6 +66,7 @@ public:
         , m_lda(lda)
         , m_stride(stride)
         , m_batch_count(batch_count)
+        , m_shared_memory(false)
     {
         bool valid_parameters = calculate_nmemb(n, lda, stride, batch_count) > 0;
         if(valid_parameters)
@@ -74,15 +75,48 @@ public:
         }
     }
 
+    explicit device_strided_batch_matrix(void*          data,
+                                         size_t         m,
+                                         size_t         n,
+                                         size_t         lda,
+                                         rocblas_stride stride,
+                                         int64_t        batch_count,
+                                         bool           HMM = false)
+        : d_vector<T>(calculate_nmemb(n, lda, stride, batch_count), HMM)
+        , m_m(m)
+        , m_n(n)
+        , m_lda(lda)
+        , m_stride(stride)
+        , m_batch_count(batch_count)
+    {
+        bool valid_parameters = calculate_nmemb(n, lda, stride, batch_count) > 0;
+        if(valid_parameters)
+        {
+            if(data != nullptr)
+            {
+                this->m_shared_memory = true;
+                this->m_data          = (T*)data;
+            }
+            else
+            {
+                this->m_shared_memory = false;
+                this->m_data          = this->device_vector_setup();
+            }
+        }
+    }
+
     //!
     //! @brief Destructor.
     //!
     ~device_strided_batch_matrix()
     {
-        if(nullptr != this->m_data)
+        if(!m_shared_memory)
         {
-            this->device_vector_teardown(this->m_data);
-            this->m_data = nullptr;
+            if(nullptr != this->m_data)
+            {
+                this->device_vector_teardown(this->m_data);
+                this->m_data = nullptr;
+            }
         }
     }
 
@@ -246,6 +280,7 @@ private:
     rocblas_stride m_stride{};
     int64_t        m_batch_count{};
     T*             m_data{};
+    bool           m_shared_memory{};
 
     static size_t calculate_nmemb(size_t n, size_t lda, rocblas_stride stride, int64_t batch_count)
     {
