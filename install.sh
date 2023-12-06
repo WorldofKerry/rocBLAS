@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+set -x
+
 declare -a input_args
 input_args="$@"
 

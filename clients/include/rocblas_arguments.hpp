@@ -182,6 +182,11 @@ struct Arguments
     bool HMM; // xnack+
     bool graph_test;
 
+    void* dA;
+    void* dB;
+    void* dC;
+    void* dD;
+
     /*************************************************************************
      *                     End Of Arguments                                  *
      *************************************************************************/
@@ -407,7 +412,7 @@ namespace ArgumentsHelper
             func("beta", arg.get_beta<decltype(T)>());
         };
 };
-    // clang-format on
+// clang-format on
 
 #else
 

@@ -152,6 +152,11 @@ void Arguments::init()
     outofplace          = false;
     HMM                 = false;
     graph_test          = false;
+
+    dA = nullptr;
+    dB = nullptr;
+    dC = nullptr;
+    dD = nullptr;
 }
 
 bool Arguments::validate()
