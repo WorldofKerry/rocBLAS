@@ -64,6 +64,19 @@ struct host_matrix : std::vector<T, host_memory_allocator<T>>
     }
 
     //!
+    //! @brief Copy constructor from std::vector
+    //!
+    host_matrix(const std::vector<T>& x)
+        : std::vector<T, host_memory_allocator<T>>(x.size())
+        , m_m(x.size())
+        , m_n(1)
+        , m_lda(1)
+    {
+        for(size_t i = 0; i < m_m; ++i)
+            (*this)[i] = x[i];
+    }
+
+    //!
     //! @brief Decay into pointer wherever pointer is expected
     //!
     operator T*()

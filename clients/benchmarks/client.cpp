@@ -1408,19 +1408,35 @@ int rocblas_bench_datafile(const std::string& filter,
     }
     if(do_shared_memory)
     {
-        device_vector<rocblas_half> dA(maxM * maxK);
-        device_vector<rocblas_half> dB(maxK * maxN);
-        device_vector<rocblas_half> dC(maxM * maxN);
-        device_vector<rocblas_half> dD(maxM * maxN);
-        void*                       dAPointer = dA.device_vector_setup();
-        void*                       dBPointer = dB.device_vector_setup();
-        void*                       dCPointer = dC.device_vector_setup();
-        void*                       dDPointer = dD.device_vector_setup();
+        using data_type = rocblas_half;
+
+        // Create temp arg to access high-level functions
+        Arguments first_arg;
+        if(args.empty())
+        {
+            return 1;
+        }
+        else
+        {
+            first_arg = args.front();
+        }
+        first_arg.M = maxM;
+        first_arg.N = maxN;
+        first_arg.K = maxK;
+
+        device_vector<data_type> dA(maxM * maxK);
+        device_vector<data_type> dB(maxK * maxN);
+        device_vector<data_type> dC(maxM * maxN);
+        device_vector<data_type> dD(maxM * maxN);
+        data_type*               dAPointer = dA.device_vector_setup();
+        data_type*               dBPointer = dB.device_vector_setup();
+        data_type*               dCPointer = dC.device_vector_setup();
+        data_type*               dDPointer = dD.device_vector_setup();
 
         // Allocate host memory
-        host_vector<rocblas_half> hA(maxM * maxK);
-        host_vector<rocblas_half> hB(maxK * maxN);
-        host_vector<rocblas_half> hC(maxM * maxN);
+        host_vector<data_type> hA(maxM * maxK);
+        host_vector<data_type> hB(maxK * maxN);
+        host_vector<data_type> hC(maxM * maxN);
 
         // Check host memory allocation
         CHECK_HIP_ERROR(hA.memcheck());
@@ -1428,18 +1444,15 @@ int rocblas_bench_datafile(const std::string& filter,
         CHECK_HIP_ERROR(hC.memcheck());
 
         // Initialize host memory
-        // rocblas_check_matrix_type, uplo, host_vector, M, N, lda
-        rocblas_init_matrix_trig<rocblas_half>(
-            rocblas_client_general_matrix, '*', hA, maxM, maxK, 1);
-        rocblas_init_matrix_trig<rocblas_half>(
-            rocblas_client_general_matrix, '*', hB, maxK, maxN, 1);
-        rocblas_init_matrix_trig<rocblas_half>(
-            rocblas_client_general_matrix, '*', hC, maxM, maxN, 1);
+        rocblas_init_vector<data_type>(hA, first_arg, rocblas_client_alpha_sets_nan);
+        rocblas_init_vector<data_type>(hB, first_arg, rocblas_client_alpha_sets_nan);
+        rocblas_init_vector<data_type>(hC, first_arg, rocblas_client_alpha_sets_nan);
 
         // copy data from CPU to device
         CHECK_HIP_ERROR(dA.transfer_from(hA));
         CHECK_HIP_ERROR(dB.transfer_from(hB));
         CHECK_HIP_ERROR(dC.transfer_from(hC));
+
         for(Arguments arg : args)
         {
             arg.dA = dAPointer;
